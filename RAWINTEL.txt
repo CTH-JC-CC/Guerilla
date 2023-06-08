@@ -1,0 +1,102 @@
+Following a report of mobile devices being used for a fraud campaign, we analyzed one of the devices preloaded with two different loaders capable of downloading other components from two different threat groups. In the full research we just presented at the Black Hat Asia 2023 conference in May, we identified the full details of other systems used by the threat actors, their companies and other commercial front ends in operation, monetization channels, Telegram groups, and employee profiles.
+
+This blog post provides a glimpse of the money-making business and monetization strategies built on top of the preinfected devices marketed and sold by one of the threat actor groups we named “Lemon Group.” It also gives an overview of how these devices were infected, the malicious plug-ins used, and the groups’ professional relationships.
+
+Brief history
+
+The size of the mobile device market has reached the billions, and it is estimated to reach 18 billion by 2025. Around 2010, reflashing (described as reprogramming and/or replacing the existing firmware of a device with a new one) and silent installation became common. The ROM image of phones can be reflashed to modify the said image with new software features, firmware updates, or arrive preinstalled to run a different operating system (OS) from the original. Developers, hobbyists, and enthusiasts knowledgeable and keen on improving their respective devices did this to maximize the features of their respective phones and/or customize their ROMs for better hardware, user experience, or battery life performance, among other purposes. In time, threat actors turned to reflashing and silent installation as techniques for malicious activities. These became rampant as phones got infected when threat actors implanted unwanted apps to monetize pay-per-install schemes. These apps were accompanied by a silent plugin that pushed apps to the victim's device whenever they wanted.
+
+In 2016, Triada malware was reportedly implanted into several devices, and in 2019 Google confirmed a case of OEM image being used by third party vendors without notifying the OEM company. In 2021, we were studying detections of the SMS PVA (SMS Phone Verified Accounts) mobile botnet fueled by compromised mobile supply chain attacks when we discovered the botnet and the operations of the threat actors. We found that the group turned it into a criminal enterprise and established the network since at least 2018.
+
+We identified the malware as Guerrilla and deployed by the threat actor group we named “Lemon Group” based on the URLs of their customer-facing pages (the group has since changed their website URLs after Trend Micro’s first reports on the SMS PVA botnet campaign). We identified the infrastructure of their backend, including the malicious plugins and command and control (C&C) servers, and observed an overlap: the Guerrilla malware’s exchange with that of the Triada operators’ communication and/or network flow. We believe these two groups worked together at some point as we observed some overlap of their C&C server infrastructure.
+
+Lemon Group’s implanted malware
+
+fig1-black-hat-asia-2023-conference-lemon-group-cybercriminal-businesses-built-on-preinfected-mobile-devices
+Figure 1. The tampered zygote load, the main plugin downloads another plugin, and another used for promotions overseas
+Following reports of phones being compromised with Guerrilla malware, we purchased a phone and extracted the ROM image for forensic analysis. We found a system library called libandroid_runtime.so that was tampered to inject a snippet code into a function called println_native. This will be called when the print logs. Afterward, this injected code will decrypt a DEX file from the data section and load it into memory. This DEX file (SHA256: f43bb33f847486bb0989aa9d4ce427a10f24bf7dcacd68036eef11c82f77d61d) has domain of Lemon Group (js***[.]big******[.]com), as well as the main plugin called “Sloth.” The DEX file has a configuration written with channel name “BSL001,” which possibly stands for that domain.
+
+While we identified a number of businesses that Lemon Group does for big data, marketing, and advertising companies, the main business involves the utilization of big data: Analyzing massive amounts of data and the corresponding characteristics of manufacturers’ shipments, different advertising content obtained from different users at different times, and the hardware data with detailed software push. This allows Lemon Group to monitor customers that can be further infected with other apps to build on, such as focusing on only showing advertisements to app users from certain regions.
+
+Architecture: Multiple plugins and criminal enterprise
+
+From our investigation, we learned the whole architecture of Lemon Group's implant. The implant is a tampered zygote dependency library that will load a downloader into a zygote process. The loaded downloader (we called main plugin) can download and run other plugins. With this, every time other app processes are forked from the zygote, it would also be tampered. The main plugin will load other plugins with the current process being the target, and the other plugins will try to control the current app via a hook. The Lemon Group’s method is similar to Xposed framework development, with both modified zygote processes to implement global process injection.
+
+fig2-black-hat-asia-2023-conference-lemon-group-cybercriminal-businesses-built-on-preinfected-mobile-devices
+Figure 2. Overview of Lemon Group’s implant
+Pivoting on http response of the domain led us to identify other Lemon Group C&C domains, including the SMS plugin we previously reported. Pivoting on the SSL certificate also led us to some frontend systems of the group. Another pivoting method allowed us to search for their customized HTTP response header name in Shodan, and we found the other connected IP addresses of Lemon Group. With this, we were able to identify the different plugins used by the group and their corresponding criminal enterprises, these are just a few of them:
+
+fig3-black-hat-asia-2023-conference-lemon-group-cybercriminal-businesses-built-on-preinfected-mobile-devices
+Figure 3. Lemon Group’s criminal enterprise using plugins
+1)     SMS plugin: Capable of intercepting received SMS and read specific messages such as one-time passwords (OTP) from various platforms such as WhatsApp, JingDong (a shopping app), and Facebook. This plugin feeds the business of SMS PVA, which provides phone numbers and OTP features for their customers.
+
+2)     Proxy plugin and proxy seller: Able to setup reverse proxy from an infected phone and use the network resources of the affected mobile device in exchange for their DoveProxy business.
+
+3)     Cookie plugin/WhatsApp plugin/Send plugin and promotion platform:
+
+a.      The cookie plugin hooks to Facebook-related apps and intercepts specific activities to launch events (e.g., Facebook app’s list of activities). It also dumps Facebook-related cookies from the app data directory and uploads it to the C&C server. This plugin can also harvest other data like the Friends list, profile, email addresses, and others.
+
+b.      The WhatsApp plugin is used to hijack WhatsApp sessions to send unwanted messages. These two were used for “overseas marketing” so the customers can use compromised Facebook accounts and boost their marketing platform by posting on Facebook on behalf of the compromised accounts. Registering a Facebook account has now become more difficult and can be banned due to malicious activities coming from newly created accounts, so these list of compromised accounts are perfect for marketing purposes.
+
+4)     Splash plugin: Hook popular apps to intercept specific activities such as launching event request ads from advertisements. Victims will see unexpected ads while launching official apps on their devices.
+
+5)     Silent plugin: When any activity needs an installation permission, it gets a list of tasks from the C&C, and each task includes apk (Android Package) metadata and the action, such as install and uninstall. This plugin executes the silent installation and launches the installed app.
+
+Rebranding and impact
+
+When we published a research paper on the operations of Lemon Group in February 2022, the group changed their operation name. In May, they removed some traces of “Lemon” and rebranded as “Durian Cloud SMS.” However, the servers are still the same and intact.
+
+Through our monitoring, we have detected over 490,000 mobile numbers used for OTP requests of Lemon SMS and, later, Durian SMS service. The customers of Lemon SMS PVA generated OTPs from platforms like JingDong, WhatsApp, Facebook, QQ, Line, and Tinder, among other applications.
+
+Tracking the indicators using Trend Micro™ Smart Protection Network™, the number of infected devices are distributed globally as the threat actor controls devices in more than 180 countries. The top 10 countries affected:
+
+US
+Mexico
+Indonesia
+Thailand
+Russia
+South Africa
+India
+Angola
+Philippines
+Argentina
+fig4-black-hat-asia-2023-conference-lemon-group-cybercriminal-businesses-built-on-preinfected-mobile-devices
+Figure 4. Lemon Group’s distribution of infected devices. Data taken from Lemon Group’s website as of March 2023. Shortly after the Black Hat presentation, these numbers were removed and the page hosting this information was taken down.
+We identified some of these businesses used for different monetization techniques, such as heavy loading of advertisements using the silent plugins pushed to infected phones, smart TV ads, and Google play apps with hidden advertisements. We believe that the threat actor’s operations can also be a case of stealing information from the infected device to be used for big data collection before selling it to other threat actors as another post-infection monetization scheme.
+
+Branching businesses: Other internet of things (IoT) devices
+
+This investigation mainly looked into preinfected mobile devices. However, we have also seen other IoT devices being infected by Lemon Group or other similar threat groups, such as:
+
+Smart TVs
+Android TV boxes
+Other display devices (e.g., Android-based screens, entertainment systems)
+Children’s Android-based watches
+We will continue to monitor these devices and deployments for updates and changes as we have yet to confirm if all these groups are connected to Lemon Group.
+
+The same company that produces the firmware components for mobile phones also produces similar components for Android Auto, a mobile app similar to an Android smartphone used on vehicles’ dashboard information and entertainment units. This widens and creates the possibility that there might be some in-car entertainment systems that are already infected. However, as of this writing we have not identified any device firmware confirmed to be infected with this specific malware payload.
+
+Conclusion
+
+We identified and analyzed a large number of firmware images for a variety of mobile devices. Since we could monitor our telemetry data for communication exchanges with C&C servers of either of the supply chain groups, we could more accurately identify potential candidates of preinfected devices, locate, and analyze the firmware stock images (if such were available) to see if we could spot any infected artifacts. 
+
+We identified over 50 different images from a variety of vendors carrying initial loaders. The more recent versions of the loaders use fileless techniques when downloading and injecting other payloads. With this latest development, public repositories for threat intelligence do not list these updated loaders and the forensic analysis of such devices and images have become significantly harder. However, we can still spot the download attempts through telemetry monitoring, and once the main component is identified we would have the decryption keys to decode the payload.
+
+Comparing our analyzed number of devices with Lemon Group’s alleged reach of 8.9 million, it’s highly likely that more devices have been preinfected but have not exchanged communication with the C&C server, have not been used or activated by the threat actor, or have yet to be distributed to the targeted country or market. Shortly after our Black Hat presentation, we noted that the page hosting these numbers of their reach was taken down. But noting our detections for this investigation alone, we were able to identify over 50 brands of mobile devices that have been infected by Guerilla malware, and one brand we’ve identified as a “Copycat” brand of the premiere line of devices from leading mobile device companies. Following our timeline estimates, the threat actor has spread this malware over the last five years. A compromise on any significant critical infrastructure with this infection can likely yield a significant profit for Lemon Group in the long run at the expense of legitimate users.
+
+Indicators of Compromise (IOCs)
+
+We identified the following indicators as related to main plugin Sloth and are detected by Trend as AndroidOS_Guerilla:
+
+f43bb33f847486bb0989aa9d4ce427a10f24bf7dcacd68036eef11c82f77d61d - channel BSL001
+e650336f4b5ba1e30cb3e9c5545dac715346c97641b72adff419474925835a43 - channel BSL002
+3ddc3bd64db1e36976b8a1c9053e81ceb734b43c21a943c15a8e750b3b88f4e8 - channel milimi2083
+1b1239af5652b168cfab49ada2f31d77554e7e8c12ec29ca5bbbbea360dd5dd4 - channel wg_au_jzhk11
+6fe61f3e68e73e543de35605bbb46624111af96dc7911f86d00b3760d7688afb - channel wg_lingx02
+dcb29a49fc12336555f7ce8332663e3693956917de850522c670b9f96a29210d - channel mikaids2071
+2da981e50267791b195e1196735d680d4aa1498340320c86f8c4bb628ece6cc9 - channel BSL004
+6fe61f3e68e73e543de35605bbb46624111af96dc7911f86d00b3760d7688afb - channel wg_lingx02
+e4d1026fc527f0e1c1175e15b953c2cef6f994565c5e0385055fb617b60d6a98 - channel mibodao2097
+68cdef672077cd1c70e0293c449f475cf234d032f2050f4dbc03fc0328846948 - channel midingheng0925
+eee2e726eef0e5673176d38da27f40089f34b90916acf8b4f12ae4ac364d2c84 - channel wg_lava01
+bc48a29eff1345236d6f10d15a340b66f2582bf0337707c6f7e3aaa5202a0f19 - channel mikupai2113
